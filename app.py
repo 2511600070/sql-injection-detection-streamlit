@@ -133,10 +133,17 @@ sql_keywords = [
 
 def normalize_payload(text):
     text = str(text).lower()
+
+    # Decode URL encoding
     text = unquote_plus(text)
-    text = re.sub(r"/\\*.*?\\*/", " ", text)
+
+    # Hilangkan komentar SQL obfuscation seperti /**/
+    text = re.sub(r"/\*.*?\*/", " ", text)
     text = text.replace("/**/", " ")
-    text = re.sub(r"\\s+", " ", text).strip()
+
+    # Hilangkan spasi berlebih
+    text = re.sub(r"\s+", " ", text).strip()
+
     return text
 
 
@@ -167,17 +174,35 @@ def has_comment_pattern(text):
 
 
 def has_boolean_pattern(text):
+    """
+    Mendeteksi pola boolean SQL Injection:
+    - OR 1=1
+    - OR (1=1)
+    - 1) OR (1=1)--
+    - AND 2=2
+    - OR 'a'='a'
+    - OR TRUE=TRUE
+    """
     text_lower = normalize_payload(text)
 
     patterns = [
-        r"\\b(or|and)\\b\\s*\\(?\\s*\\d+\\s*=\\s*\\d+\\s*\\)?",
-        r"\\d+\\s*\\)?\\s*\\b(or|and)\\b\\s*\\(?\\s*\\d+\\s*=\\s*\\d+\\s*\\)?",
-        r"\\b(or|and)\\b\\s*\\(?\\s*['\\\"][^'\\\"]+['\\\"]\\s*=\\s*['\\\"][^'\\\"]+['\\\"]\\s*\\)?",
-        r"\\b(or|and)\\b\\s*\\(?\\s*true\\s*=\\s*true\\s*\\)?",
-        r"\\(?\\s*1\\s*=\\s*1\\s*\\)?"
+        # OR/AND angka sama angka, dengan atau tanpa kurung
+        r"\b(or|and)\b\s*\(?\s*\d+\s*=\s*\d+\s*\)?",
+
+        # Bentuk khusus: 1) OR (1=1)--
+        r"\d+\s*\)?\s*\b(or|and)\b\s*\(?\s*\d+\s*=\s*\d+\s*\)?",
+
+        # OR/AND string sama string, contoh 'a'='a', '1'='1'
+        r"\b(or|and)\b\s*\(?\s*['\"][^'\"]+['\"]\s*=\s*['\"][^'\"]+['\"]\s*\)?",
+
+        # TRUE=TRUE
+        r"\b(or|and)\b\s*\(?\s*true\s*=\s*true\s*\)?",
+
+        # Pola 1=1 langsung
+        r"\(?\s*1\s*=\s*1\s*\)?"
     ]
 
-    return int(any(re.search(p, text_lower) for p in patterns))
+    return int(any(re.search(pattern, text_lower) for pattern in patterns))
 
 
 def has_union_select(text):
@@ -577,7 +602,7 @@ with tab3:
     """)
 
     st.markdown("""
-    1. Rule-Based Indicator untuk mendeteksi pola umum SQL Injection seperti boolean pattern, comment pattern, union select, time-based attack, encoding 	dan stacked query.
+    1. Rule-Based Indicator untuk mendeteksi pola umum SQL Injection seperti boolean pattern, comment pattern, union select, time-based attack, encoding dan stacked query.
     2. Machine Learning untuk melakukan klasifikasi payload berbasis TF-IDF character n-gram.
     3. Deep Learning untuk membaca pola sequence karakter pada payload.""")
 
